@@ -110,7 +110,7 @@ def insert(num_incidents):
         }
         for incident in incident_list
     ]
-
+    
     # Track memory usage before insertion
     process = psutil.Process(os.getpid())
     memory_before_query = process.memory_info().rss / 1024 / 1024  # in MB
