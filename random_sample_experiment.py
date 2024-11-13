@@ -55,10 +55,10 @@ def postgres_exp (num_incidents) :
     # ------------- randomly select incidents ---------------
     # Define the possible incident types and their distribution
     incident_types = ['r', 'u', 'i']
-    weights = [0.8, 0.1, 0.1]  # 80% reason, 10% update, 10% insert
+    weights = [0.8, 0.1, 0.1]  # 80% reads, 10% update, 10% insert
 
     # Generate a list of 100 incidents based on the specified weights
-    incidents = random.choices(incident_types, weights, k=100)
+    incidents = random.choices(incident_types, weights, k=num_incidents)
 
     incident_types = ['r', 'u', 'i']
     weights = [0.8, 0.1, 0.1]  # 80% reason, 10% update, 10% insert
@@ -119,17 +119,10 @@ def mongo_exp (num_incidents) :
     ids = [doc['_id'] for doc in collection.find({}, {'_id': 1})]
     
     # ------------- randomly select incidents ---------------
-    # Define the possible incident types and their distribution
     incident_types = ['r', 'u', 'i']
     weights = [0.8, 0.1, 0.1]  # 80% reason, 10% update, 10% insert
 
-    # Generate a list of 100 incidents based on the specified weights
-    incidents = random.choices(incident_types, weights, k=100)
-
-    incident_types = ['r', 'u', 'i']
-    weights = [0.8, 0.1, 0.1]  # 80% reason, 10% update, 10% insert
-
-    incidents = random.choices(incident_types, weights, k=100)
+    incidents = random.choices(incident_types, weights, k=num_incidents)
     incident_counts = Counter(incidents)
 
     num_reads = incident_counts['r']
