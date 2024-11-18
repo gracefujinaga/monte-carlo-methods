@@ -6,6 +6,8 @@ import os
 from pymongo import MongoClient
 from collections import Counter
 import matplotlib.pyplot as plt
+import numpy as np
+
 
 def generate_incident():
     # generate number field
@@ -53,17 +55,10 @@ def postgres_exp (num_incidents) :
     ids = [x[0] for x in rows]
     
     # ------------- randomly select incidents ---------------
-    # Define the possible incident types and their distribution
-    incident_types = ['r', 'u', 'i']
-    weights = [0.8, 0.1, 0.1]  # 80% reads, 10% update, 10% insert
-
-    # Generate a list of 100 incidents based on the specified weights
-    incidents = random.choices(incident_types, weights, k=num_incidents)
-
     incident_types = ['r', 'u', 'i']
     weights = [0.8, 0.1, 0.1]  # 80% reason, 10% update, 10% insert
 
-    incidents = random.choices(incident_types, weights, k=100)
+    incidents = random.choices(incident_types, weights, k=num_incidents)
     incident_counts = Counter(incidents)
 
     num_reads = incident_counts['r']
@@ -74,10 +69,6 @@ def postgres_exp (num_incidents) :
     read_ids = random.sample(ids, num_reads)
     update_ids = random.sample(ids, num_updates)
     insert_list = [generate_incident() for _ in range(num_inserts)]
-
-    start_time = time.time()
-    process = psutil.Process(os.getpid())
-    mem_before_exp = process.memory_info().rss / 1024 / 1024  # in MB
 
     for incident_id in read_ids: 
         query = f"SELECT * FROM logs WHERE ID = '{incident_id}'"
@@ -100,14 +91,10 @@ def postgres_exp (num_incidents) :
             """
         cursor.execute(query)
 
-    memory_after_exp = process.memory_info().rss / 1024 / 1024  # in MB
-
-    end_time =  time.time()
-    
+    conn.commit()
     cursor.close()
     conn.close()
 
-    return end_time - start_time, memory_after_exp - mem_before_exp
 
 def mongo_exp (num_incidents) :
     # Database connection details
@@ -134,22 +121,18 @@ def mongo_exp (num_incidents) :
     update_ids = random.sample(ids, num_updates)
     insert_list = [generate_incident() for _ in range(num_inserts)]
 
-    start_time = time.time()
-    process = psutil.Process(os.getpid())
-    mem_before_exp = process.memory_info().rss / 1024 / 1024  # in MB
-
     for incident_id in read_ids: 
-        incident_data = collection.find_one({'ID': incident_id})
+        incident_data = collection.find_one({'_id': incident_id})
 
     for incident_id in update_ids:
         # Update the incident data (incident_state to 'Resolved', active to False)
         collection.update_one(
-            {'ID': incident_id},  # filter by the incident ID
+            {'_id': incident_id},  # filter by the incident ID
             {'$set': {'incident_state': 'Resolved', 'active': False}}  # update fields
         )
 
-    incident_documents = [
-        {
+    for incident in insert_list:
+        incident_document = {
             'number': incident[0],
             'incident_state': incident[1],
             'active': incident[2],
@@ -157,18 +140,13 @@ def mongo_exp (num_incidents) :
             'sys_mod_count': incident[4],
             'caller_id': incident[5]
         }
-        for incident in insert_list
-    ]
+        collection.insert_one(incident_document)
 
-    # Insert the generated incident data into MongoDB
-    collection.insert_many(incident_documents)
-
-    memory_after_exp = process.memory_info().rss / 1024 / 1024  # in MB
-
-    end_time =  time.time()
-
-    return end_time - start_time, memory_after_exp - mem_before_exp
-
+def get_descriptive_stats(data):
+    mean = np.mean(data)
+    q75, q25 = np.percentile(data, [75 ,25])
+    iqr = q75 - q25
+    return mean, iqr, np.median(data)
 
 def simulation(num_experiments, num_daily_incidents):
     # Lists to store results
@@ -179,50 +157,77 @@ def simulation(num_experiments, num_daily_incidents):
 
     # Run experiments and collect results
     for _ in range(num_experiments):
-        mongo_tuple = mongo_exp(num_daily_incidents)  
-        ps_tuple = postgres_exp(num_daily_incidents)  
-        
-        mongo_times.append(mongo_tuple[0])
-        mongo_memories.append(mongo_tuple[1])
-        ps_times.append(ps_tuple[0])
-        ps_memories.append(ps_tuple[1])
 
+        # measure mongo
+        process = psutil.Process(os.getpid())
+        memory_before = process.memory_info().rss / 1024 / 1024  # in MB
+        start_time = time.time()
 
-    # Combined execution time plot
-    plt.figure(figsize=(12, 6))
+        mongo_exp(num_daily_incidents) 
 
-    # Plot MongoDB execution times
-    plt.hist(mongo_times, bins=20, color='blue', alpha=0.7, label='MongoDB Execution Time')
+        end_time = time.time()
+        memory_after = process.memory_info().rss / 1024 / 1024  # in MB
+        mongo_times.append(end_time - start_time)
+        mongo_memories.append(memory_after - memory_before)
 
-    # Plot PostgreSQL execution times
-    plt.hist(ps_times, bins=20, color='green', alpha=0.7, label='PostgreSQL Execution Time')
+        # measure postgres
+        process = psutil.Process(os.getpid())
+        memory_before = process.memory_info().rss / 1024 / 1024  # in MB
+        start_time = time.time()
 
-    plt.xlabel('Execution Time (seconds)')
-    plt.ylabel('Frequency')
-    plt.title('Execution Time Distribution')
-    plt.legend()
+        postgres_exp(num_daily_incidents) 
 
+        end_time = time.time()
+        memory_after = process.memory_info().rss / 1024 / 1024  # in MB
+        ps_times.append(end_time - start_time)
+        ps_memories.append(memory_after - memory_before)
+
+    # Descriptive stats for MongoDB
+    mongo_mean_time, mongo_iqr_time, mongo_median_time = get_descriptive_stats(mongo_times)
+    mongo_mean_mem, mongo_iqr_mem, mongo_median_mem = get_descriptive_stats(mongo_memories)
+
+    # Descriptive stats for PostgreSQL
+    ps_mean_time, ps_iqr_time, ps_median_time = get_descriptive_stats(ps_times)
+    ps_mean_mem, ps_iqr_mem, ps_median_mem = get_descriptive_stats(ps_memories)
+
+    # Print descriptive statistics
+    print("MongoDB Execution Time - Mean: {:.4f}, IQR: {:.4f}".format(mongo_mean_time, mongo_iqr_time, mongo_median_time))
+    print("PostgreSQL Execution Time - Mean: {:.4f}, IQR: {:.4f}".format(ps_mean_time, ps_iqr_time, ps_median_time))
+    print("MongoDB Memory Usage - Mean: {:.4f}, IQR: {:.4f}".format(mongo_mean_mem, mongo_iqr_mem, mongo_median_mem))
+    print("PostgreSQL Memory Usage - Mean: {:.4f}, IQR: {:.4f}".format(ps_mean_mem, ps_iqr_mem, ps_median_mem))
+
+    # Create a figure with 4 subplots (2 rows, 2 columns)
+    fig, axs = plt.subplots(2, 2, figsize=(8, 8))
+
+    # MongoDB Memory Histogram
+    axs[0, 0].hist(mongo_memories, bins='auto', color='blue', alpha=0.7)
+    axs[0, 0].set_title(f'MongoDB Memory Usage')
+    axs[0, 0].set_xlabel('Memory Usage (MB)')
+    axs[0, 0].set_ylabel('Frequency')
+
+    # PostgreSQL Memory Histogram
+    axs[0, 1].hist(ps_memories, bins='auto', color='green', alpha=0.7)
+    axs[0, 1].set_title(f'PostgreSQL Memory Usage')
+    axs[0, 1].set_xlabel('Memory Usage (MB)')
+    axs[0, 1].set_ylabel('Frequency')
+
+    # MongoDB Execution Time Histogram
+    axs[1, 0].hist(mongo_times, bins='auto', color='blue', alpha=0.7)
+    axs[1, 0].set_title(f'MongoDB Execution Time')
+    axs[1, 0].set_xlabel('Execution Time (seconds)')
+    axs[1, 0].set_ylabel('Frequency')
+
+    # PostgreSQL Execution Time Histogram
+    axs[1, 1].hist(ps_times, bins='auto', color='green', alpha=0.7)
+    axs[1, 1].set_title(f'PostgreSQL Execution Time')
+    axs[1, 1].set_xlabel('Execution Time (seconds)')
+    axs[1, 1].set_ylabel('Frequency')
+
+    # Adjust layout
     plt.tight_layout()
     plt.show()
 
-    # Combined memory usage plot
-    plt.figure(figsize=(12, 6))
 
-    # Plot MongoDB memory usage
-    plt.hist(mongo_memories, bins=20, color='blue', alpha=0.7, label='MongoDB Memory Usage')
-
-    # Plot PostgreSQL memory usage
-    plt.hist(ps_memories, bins=20, color='green', alpha=0.7, label='PostgreSQL Memory Usage')
-
-    plt.xlabel('Memory Usage (MB)')
-    plt.ylabel('Frequency')
-    plt.title('Memory Usage Distribution')
-    plt.legend()
-
-    plt.tight_layout()
-    plt.show()
-
-    
 simulation(100, 100)
 
 

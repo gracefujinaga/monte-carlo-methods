@@ -20,19 +20,12 @@ def read(num_incidents):
     # Randomly sample the IDs
     ids = random.sample(ids, num_incidents)
 
-    # Track memory usage before and after fetching
-    process = psutil.Process(os.getpid())
-    memory_before_query = process.memory_info().rss / 1024 / 1024  # in MB
-
     for incident_id in ids:
         # Fetch the incident data based on the random incident ID
         incident_data = collection.find_one({'ID': incident_id})
 
-    memory_after_fetch = process.memory_info().rss / 1024 / 1024  # in MB
-
     client.close()
-    
-    return memory_after_fetch - memory_before_query
+
 
 def update(num_incidents):
     # MongoDB connection
@@ -46,10 +39,6 @@ def update(num_incidents):
     # Randomly sample the IDs
     ids = random.sample(ids, num_incidents)
 
-    # Track memory usage before and after the update
-    process = psutil.Process(os.getpid())
-    memory_before_query = process.memory_info().rss / 1024 / 1024  # in MB
-
     for incident_id in ids:
         # Update the incident data (incident_state to 'Resolved', active to False)
         collection.update_one(
@@ -57,11 +46,8 @@ def update(num_incidents):
             {'$set': {'incident_state': 'Resolved', 'active': False}}  # update fields
         )
 
-    memory_after_fetch = process.memory_info().rss / 1024 / 1024  # in MB
-
     client.close()
 
-    return memory_after_fetch - memory_before_query
 
 def generate_incident():
     # generate number field
@@ -98,9 +84,8 @@ def insert(num_incidents):
     # Generate a list of incident data
     incident_list = [generate_incident() for _ in range(num_incidents)]
 
-    # Prepare incident data for insertion
-    incident_documents = [
-        {
+    for incident in incident_list:
+        incident_document = {
             'number': incident[0],
             'incident_state': incident[1],
             'active': incident[2],
@@ -108,41 +93,28 @@ def insert(num_incidents):
             'sys_mod_count': incident[4],
             'caller_id': incident[5]
         }
-        for incident in incident_list
-    ]
-    
-    # Track memory usage before insertion
-    process = psutil.Process(os.getpid())
-    memory_before_query = process.memory_info().rss / 1024 / 1024  # in MB
-
-    # Insert the generated incident data into MongoDB
-    collection.insert_many(incident_documents)
-
-    # Measure memory usage after insertion
-    memory_after_fetch = process.memory_info().rss / 1024 / 1024  # in MB
+        collection.insert_one(incident_document)
 
     client.close()
 
-    return memory_after_fetch - memory_before_query
-
 def measure_mongo_query(func, num_incidents) :
     # Measure memory and time usage
-    #process = psutil.Process(os.getpid())
-    # memory_before = process.memory_info().rss / 1024 / 1024  # in MB
+    process = psutil.Process(os.getpid())
+    memory_before = process.memory_info().rss / 1024 / 1024  # in MB
     start_time = time.time()
-
-    mem_usage = func(num_incidents)
+    
+    func(num_incidents)
 
     end_time = time.time()
-    # memory_after = process.memory_info().rss / 1024 / 1024  # in MB
+    memory_after = process.memory_info().rss / 1024 / 1024  # in MB
 
     time_taken = end_time - start_time
-    memory_used = mem_usage
+    memory_used = memory_after-memory_before
 
     print(f"Mongo {func.__name__} - Time: {time_taken:.4f} seconds, Memory Used: {memory_used} MB")
 
 
-for count in [10, 100, 1000]:
+for count in [10, 100, 1000, 100000]:
     print(f"--------------------{count}-----------------------")
     measure_mongo_query(read, count)
     measure_mongo_query(update, count)
