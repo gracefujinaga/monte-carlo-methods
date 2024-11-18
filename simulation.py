@@ -8,7 +8,6 @@ from collections import Counter
 import matplotlib.pyplot as plt
 import numpy as np
 
-
 def generate_incident():
     # generate number field
     random_number = random.randint(0, 9999999)
@@ -182,15 +181,14 @@ def simulation(num_experiments, num_daily_incidents):
         ps_times.append(end_time - start_time)
         ps_memories.append(memory_after - memory_before)
 
-    # Descriptive stats for MongoDB
+    # get statistics for mongo
     mongo_mean_time, mongo_iqr_time, mongo_median_time = get_descriptive_stats(mongo_times)
     mongo_mean_mem, mongo_iqr_mem, mongo_median_mem = get_descriptive_stats(mongo_memories)
 
-    # Descriptive stats for PostgreSQL
+    # get statistics for postgres
     ps_mean_time, ps_iqr_time, ps_median_time = get_descriptive_stats(ps_times)
     ps_mean_mem, ps_iqr_mem, ps_median_mem = get_descriptive_stats(ps_memories)
 
-    # Print descriptive statistics
     print("MongoDB Execution Time - Mean: {:.4f}, IQR: {:.4f}".format(mongo_mean_time, mongo_iqr_time, mongo_median_time))
     print("PostgreSQL Execution Time - Mean: {:.4f}, IQR: {:.4f}".format(ps_mean_time, ps_iqr_time, ps_median_time))
     print("MongoDB Memory Usage - Mean: {:.4f}, IQR: {:.4f}".format(mongo_mean_mem, mongo_iqr_mem, mongo_median_mem))
@@ -223,10 +221,8 @@ def simulation(num_experiments, num_daily_incidents):
     axs[1, 1].set_xlabel('Execution Time (seconds)')
     axs[1, 1].set_ylabel('Frequency')
 
-    # Adjust layout
     plt.tight_layout()
     plt.show()
-
 
 simulation(100, 100)
 
