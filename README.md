@@ -8,6 +8,8 @@ https://www.kaggle.com/datasets/vipulshinde/incident-response-log?resource=downl
 
 # Overview of Contents
 
+The accompanying paper is in the Analysis.pdf file
+
 database_setup.ipynb describes how to set up the experiments and the databases.
 
 The first benchmark study code is in mongo_experiments.py and ps_experiments.py. 
