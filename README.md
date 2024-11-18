@@ -15,7 +15,9 @@ The first benchmark study code is in mongo_experiments.py and ps_experiments.py.
 The simulation benchmark study is in simulation.py.
 
 The results are in /Outputs folder. The output.txt has the command line outputs from all three files and the
-results.png file has the visualizations fromt he simulation.py file
+results.png file has the visualizations fromt he simulation.py file.
+
+All of the data and relevant data dictionary are in the Data folder
 
 # Abstract
 In order to compare PostgreSQL and MongoDB, a benchmark study was created. A real set of data was used. The data is an event log of an incident management process gathered from an audit system of an instance of the ServiceNowTM platform with about 120,000 tickets. Logging tickets and fixes for software projects is commonplace, and addressing these tickets is essential in creating and maintaining an efficient, useful software product. The hypothetical question here is which database a company should use to handle their incident tickets. 
